@@ -1,0 +1,17 @@
+[package]
+name = "bevy_irc"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+twitch = ["thiserror"]
+
+[dependencies]
+async-compat = "0.2"
+bevy_app = "0.8"
+bevy_ecs = "0.8"
+bevy_tasks = "0.8"
+futures-lite = "1.12"
+irc = { version = "0.15", default-features = false, features = ["tls-rust"] }
+log = "*"
+thiserror = { version = "1.0", optional = true }
