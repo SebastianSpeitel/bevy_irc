@@ -270,10 +270,11 @@ fn receive(mut writer: EventWriter<Message>, mut streams: Query<&mut Stream>) {
 ///
 /// let mut app = App::new();
 ///
-/// let irc = app.world.spawn()
-///     .insert(Connection::new("irc.example.com", 6667))
-///     .insert(Authentication::new("bevy"))
-///     .insert(Channels(vec!["#bevy".to_owned()]));
+/// let irc = app.world.spawn((
+///     Connection::new("irc.example.com", 6667),
+///     Authentication::new("bevy"),
+///     Channels(vec!["#bevy".to_owned()]),
+/// ));
 ///
 /// app.add_plugin(IRCPlugin);
 /// ```
