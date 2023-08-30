@@ -8,9 +8,9 @@ twitch = ["thiserror"]
 
 [dependencies]
 async-compat = "0.2"
-bevy_app = "0.10"
-bevy_ecs = "0.10"
-bevy_tasks = "0.10"
+bevy_app = "0.11"
+bevy_ecs = "0.11"
+bevy_tasks = "0.11"
 futures-lite = "1.12"
 irc = { version = "0.15", default-features = false, features = ["tls-rust"] }
 log = "*"

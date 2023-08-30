@@ -58,7 +58,7 @@ impl Connection {
 }
 
 /// Bevy component containing the connected IRC client
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Client(irc::client::Client);
 
 impl Deref for Client {
@@ -72,6 +72,30 @@ impl Deref for Client {
 impl DerefMut for Client {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+/// Notype for IRC Messages to derive Event
+#[derive(Event, Debug)]
+pub struct MessageEvent(pub Message);
+
+impl Deref for MessageEvent {
+    type Target = Message;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for MessageEvent {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<Message> for MessageEvent {
+    fn from(msg: Message) -> Self {
+        Self(msg)
     }
 }
 
@@ -245,13 +269,13 @@ fn capabilities(
     }
 }
 
-fn receive(mut writer: EventWriter<Message>, mut streams: Query<&mut Stream>) {
+fn receive(mut writer: EventWriter<MessageEvent>, mut streams: Query<&mut Stream>) {
     for mut stream in streams.iter_mut() {
         while let Some(resp) = future::block_on(future::poll_once(&mut stream.0.next())).flatten() {
             match resp {
                 Ok(msg) => {
                     trace!("Received: {:?}", msg.to_string().trim_end());
-                    writer.send(msg);
+                    writer.send(msg.into());
                 }
                 Err(e) => {
                     error!("Failed to receive: {}", e);
@@ -282,14 +306,15 @@ pub struct IRCPlugin;
 
 impl bevy_app::Plugin for IRCPlugin {
     fn build(&self, app: &mut bevy_app::App) {
+        use bevy_app::Update;
         AsyncComputeTaskPool::init(Default::default);
 
-        app.add_event::<Message>();
-        app.add_system(connect);
-        app.add_system(finish_connect);
-        app.add_system(identify);
-        app.add_system(join_and_part);
-        app.add_system(capabilities);
-        app.add_system(receive);
+        app.add_event::<MessageEvent>();
+        app.add_systems(Update, connect);
+        app.add_systems(Update, finish_connect);
+        app.add_systems(Update, identify);
+        app.add_systems(Update, join_and_part);
+        app.add_systems(Update, capabilities);
+        app.add_systems(Update, receive);
     }
 }
