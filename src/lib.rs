@@ -1,12 +1,14 @@
-#![deny(missing_docs)]
+#![warn(missing_docs)]
+#![allow(clippy::type_complexity)]
 
 //! # TODO: Add documentation
 
 use std::ops::{Deref, DerefMut};
+use std::sync::{Arc, Mutex};
 
 use async_compat::Compat;
 use bevy_ecs::prelude::*;
-use bevy_tasks::{AsyncComputeTaskPool, Task};
+use bevy_tasks::AsyncComputeTaskPool;
 use futures_lite::{future, StreamExt};
 pub use irc;
 use irc::client::prelude::*;
@@ -152,66 +154,73 @@ pub struct Capabilities(pub Vec<Capability>);
 struct Stream(irc::client::ClientStream);
 
 #[derive(Component)]
-struct Connecting(Task<Result<irc::client::Client, irc::error::Error>>);
+struct Connecting(Arc<Mutex<Option<Result<irc::client::Client, irc::error::Error>>>>);
 
 #[derive(Component)]
 struct Identified;
 
 fn connect(mut commands: Commands, chats: Query<(Entity, &Connection), Added<Connection>>) {
-    let pool = AsyncComputeTaskPool::get();
+    let pool = AsyncComputeTaskPool::get_or_init(Default::default);
 
-    for (chat, con) in chats.iter() {
-        let task = pool.spawn({
-            let config = Config {
-                server: Some(con.host.to_owned()),
-                port: Some(con.port),
-                ping_time: Some(u32::MAX),
-                ..Default::default()
-            };
-
-            Compat::new(irc::client::Client::from_config(config))
-        });
-        commands.entity(chat).insert(Connecting(task));
+    for (chat, con) in &chats {
+        let cell = Arc::new(Mutex::new(None));
+        let config = Config {
+            server: Some(con.host.clone()),
+            port: Some(con.port),
+            ping_time: Some(u32::MAX),
+            ..Default::default()
+        };
+        let task_cell = cell.clone();
+        pool.spawn(async move {
+            let res = Compat::new(irc::client::Client::from_config(config)).await;
+            task_cell.lock().unwrap().replace(res);
+        })
+        .detach();
+        commands.entity(chat).insert(Connecting(cell));
     }
 }
 
-fn finish_connect(mut commands: Commands, mut chats: Query<(Entity, &mut Connecting)>) {
-    for (chat, mut connecting) in chats.iter_mut() {
-        match future::block_on(future::poll_once(&mut connecting.0)) {
-            Some(Ok(mut client)) => {
-                info!("Connected");
-                commands.entity(chat).remove::<Connecting>();
-
-                if let Ok(stream) = client.stream() {
-                    commands.entity(chat).insert(Stream(stream));
-                } else {
-                    error!("Failed to get stream");
-                }
-
-                commands.entity(chat).insert(Client(client));
-            }
-            Some(Err(e)) => {
+fn finish_connect(mut commands: Commands, chats: Query<(Entity, &mut Connecting)>) {
+    for (chat, connecting) in &chats {
+        let mut state = connecting.0.lock().unwrap();
+        let res = match state.take() {
+            None => continue,
+            Some(r) => r,
+        };
+        drop(state);
+        commands.entity(chat).remove::<Connecting>();
+        let mut client = match res {
+            Err(e) => {
                 error!("Failed to connect: {}", e);
-                commands.entity(chat).remove::<Connecting>();
+                continue;
             }
-            None => {}
+            Ok(c) => c,
+        };
+        info!("Connected");
+
+        if let Ok(stream) = client.stream() {
+            commands.entity(chat).insert(Stream(stream));
+        } else {
+            error!("Failed to get stream");
         }
+
+        commands.entity(chat).insert(Client(client));
     }
 }
 
 fn identify(
     mut commands: Commands,
-    mut chats: Query<(Entity, &Client, &Authentication), Without<Identified>>,
+    chats: Query<(Entity, &Client, &Authentication), Without<Identified>>,
 ) {
-    for (chat, client, auth) in chats.iter_mut() {
+    for (chat, client, auth) in &chats {
         info!("Identifying as {}", auth.nick);
         if let Some(pass) = auth.pass.as_ref() {
-            if let Err(e) = client.send(Command::PASS(pass.to_owned())) {
+            if let Err(e) = client.send(Command::PASS(pass.clone())) {
                 error!("Failed to send PASS: {}", e);
                 continue;
             }
         }
-        if let Err(e) = client.send(Command::NICK(auth.nick.to_owned())) {
+        if let Err(e) = client.send(Command::NICK(auth.nick.clone())) {
             error!("Failed to send NICK: {}", e);
             continue;
         }
@@ -225,7 +234,7 @@ fn join_and_part(
         (With<Identified>, Or<(Added<Identified>, Changed<Channels>)>),
     >,
 ) {
-    for (client, channels) in chats.iter_mut() {
+    for (client, channels) in &mut chats {
         info!("Joining and parting channels");
         let current = client.list_channels().unwrap_or_default();
 
@@ -252,7 +261,7 @@ fn join_and_part(
     }
 }
 fn capabilities(
-    mut chats: Query<
+    chats: Query<
         (&Client, &Capabilities),
         (
             With<Identified>,
@@ -260,7 +269,7 @@ fn capabilities(
         ),
     >,
 ) {
-    for (client, caps) in chats.iter_mut() {
+    for (client, caps) in &chats {
         info!("Requesting capabilities");
 
         client.send_cap_req(&caps.0).unwrap_or_else(|e| {
@@ -270,7 +279,7 @@ fn capabilities(
 }
 
 fn receive(mut writer: EventWriter<MessageEvent>, mut streams: Query<&mut Stream>) {
-    for mut stream in streams.iter_mut() {
+    for mut stream in &mut streams {
         while let Some(resp) = future::block_on(future::poll_once(&mut stream.0.next())).flatten() {
             match resp {
                 Ok(msg) => {
@@ -307,7 +316,6 @@ pub struct IRCPlugin;
 impl bevy_app::Plugin for IRCPlugin {
     fn build(&self, app: &mut bevy_app::App) {
         use bevy_app::Update;
-        AsyncComputeTaskPool::init(Default::default);
 
         app.add_event::<MessageEvent>();
         app.add_systems(Update, connect);
