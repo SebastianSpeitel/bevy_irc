@@ -309,7 +309,7 @@ fn receive(mut writer: EventWriter<MessageEvent>, mut streams: Query<&mut Stream
 ///     Channels(vec!["#bevy".to_owned()]),
 /// ));
 ///
-/// app.add_plugin(IRCPlugin);
+/// app.add_plugins(IRCPlugin);
 /// ```
 pub struct IRCPlugin;
 
