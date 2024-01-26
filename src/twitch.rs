@@ -5,6 +5,7 @@ pub trait TwitchMessageExt {
     type Error: std::error::Error;
     fn is_send_by_mod(&self) -> bool;
     fn message_id(&self) -> Option<&str>;
+    fn user_id(&self) -> Option<&str>;
     fn display_name(&self) -> Option<&str>;
     fn set_reply_parent_id(&mut self, id: &str);
     fn set_reply_parent(&mut self, parent_message: &Self) {
@@ -47,31 +48,24 @@ impl TwitchMessageExt for super::Message {
     }
 
     fn display_name(&self) -> Option<&str> {
-        let tags = match &self.tags {
-            Some(tags) => tags,
-            None => return None,
-        };
-
-        for Tag(key, val) in tags {
-            if key == "display-name" {
-                return val.as_deref();
-            }
-        }
-        None
+        self.tags
+            .as_ref()?
+            .iter()
+            .find_map(|t| (t.0 == "display-name").then_some(t.1.as_deref()))?
     }
 
     fn message_id(&self) -> Option<&str> {
-        let tags = match &self.tags {
-            Some(tags) => tags,
-            None => return None,
-        };
+        self.tags
+            .as_ref()?
+            .iter()
+            .find_map(|t| (t.0 == "id").then_some(t.1.as_deref()))?
+    }
 
-        for Tag(key, val) in tags {
-            if key == "id" {
-                return val.as_deref();
-            }
-        }
-        None
+    fn user_id(&self) -> Option<&str> {
+        self.tags
+            .as_ref()?
+            .iter()
+            .find_map(|t| (t.0 == "user-id").then_some(t.1.as_deref()))?
     }
 
     fn set_reply_parent_id(&mut self, id: &str) {
