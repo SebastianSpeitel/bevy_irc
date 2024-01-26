@@ -317,6 +317,9 @@ impl bevy_app::Plugin for IRCPlugin {
     fn build(&self, app: &mut bevy_app::App) {
         use bevy_app::Update;
 
+        app.insert_non_send_resource(NonSendRes);
+        app.add_systems(Update, main_thread_system);
+
         app.add_event::<MessageEvent>();
         app.add_systems(Update, connect);
         app.add_systems(Update, finish_connect);
@@ -324,10 +327,11 @@ impl bevy_app::Plugin for IRCPlugin {
         app.add_systems(Update, join_and_part);
         app.add_systems(Update, capabilities);
         app.add_systems(Update, receive);
-        app.add_systems(Update, main_thread_system);
     }
 }
 
-fn main_thread_system(_: NonSend<()>) {
+#[derive(Resource)]
+struct NonSendRes;
+fn main_thread_system(_: NonSend<NonSendRes>) {
     bevy_tasks::tick_global_task_pools_on_main_thread();
 }
