@@ -317,6 +317,7 @@ impl bevy_app::Plugin for IRCPlugin {
     fn build(&self, app: &mut bevy_app::App) {
         use bevy_app::Update;
 
+        AsyncComputeTaskPool::get_or_init(Default::default);
         app.insert_non_send_resource(NonSendRes);
         app.add_systems(Update, main_thread_system);
 
