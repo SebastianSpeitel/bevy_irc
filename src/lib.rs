@@ -159,9 +159,11 @@ struct Connecting(Arc<Mutex<Option<Result<irc::client::Client, irc::error::Error
 #[derive(Component)]
 struct Identified;
 
-fn connect(mut commands: Commands, chats: Query<(Entity, &Connection), Added<Connection>>) {
-    let pool = AsyncComputeTaskPool::get_or_init(Default::default);
-
+fn connect(
+    mut commands: Commands,
+    chats: Query<(Entity, &Connection), Added<Connection>>,
+    pool: NonSend<TaskPool>,
+) {
     for (chat, con) in &chats {
         let cell = Arc::new(Mutex::new(None));
         let config = Config {
@@ -171,11 +173,12 @@ fn connect(mut commands: Commands, chats: Query<(Entity, &Connection), Added<Con
             ..Default::default()
         };
         let task_cell = cell.clone();
-        pool.spawn(async move {
-            let res = Compat::new(irc::client::Client::from_config(config)).await;
-            task_cell.lock().unwrap().replace(res);
-        })
-        .detach();
+        pool.0
+            .spawn(async move {
+                let res = Compat::new(irc::client::Client::from_config(config)).await;
+                task_cell.lock().unwrap().replace(res);
+            })
+            .detach();
         commands.entity(chat).insert(Connecting(cell));
     }
 }
@@ -315,14 +318,14 @@ pub struct IRCPlugin;
 
 impl bevy_app::Plugin for IRCPlugin {
     fn build(&self, app: &mut bevy_app::App) {
-        use bevy_app::Update;
+        use bevy_app::{PreUpdate, Update};
 
         ComputeTaskPool::get_or_init(Default::default);
         AsyncComputeTaskPool::get_or_init(Default::default);
         IoTaskPool::get_or_init(Default::default);
 
-        app.insert_non_send_resource(NonSendRes);
-        app.add_systems(Update, main_thread_system);
+        app.init_non_send_resource::<TaskPool>();
+        app.add_systems(PreUpdate, tick);
 
         app.add_event::<MessageEvent>();
         app.add_systems(Update, connect);
@@ -334,8 +337,11 @@ impl bevy_app::Plugin for IRCPlugin {
     }
 }
 
-#[derive(Resource)]
-struct NonSendRes;
-fn main_thread_system(_: NonSend<NonSendRes>) {
-    bevy_tasks::tick_global_task_pools_on_main_thread();
+#[derive(Resource, Default)]
+struct TaskPool(bevy_tasks::TaskPool);
+
+fn tick(pool: NonSend<TaskPool>) {
+    pool.0.with_local_executor(|executor| {
+        executor.try_tick();
+    });
 }
