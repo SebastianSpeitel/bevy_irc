@@ -4,11 +4,11 @@
 //! # TODO: Add documentation
 
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, Mutex};
+use std::pin::Pin;
+use std::sync::OnceLock;
 
 use async_compat::Compat;
 use bevy_ecs::prelude::*;
-use bevy_tasks::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool};
 use futures_lite::{future, StreamExt};
 pub use irc;
 use irc::client::prelude::*;
@@ -153,48 +153,51 @@ pub struct Capabilities(pub Vec<Capability>);
 #[derive(Component)]
 struct Stream(irc::client::ClientStream);
 
+type ConnectingFut = Compat<
+    Pin<
+        Box<
+            dyn std::future::Future<Output = Result<irc::client::Client, irc::error::Error>>
+                + Sync
+                + Send,
+        >,
+    >,
+>;
+
 #[derive(Component)]
-struct Connecting(Arc<Mutex<Option<Result<irc::client::Client, irc::error::Error>>>>);
+struct Connecting(OnceLock<ConnectingFut>);
 
 #[derive(Component)]
 struct Identified;
 
-fn connect(
-    mut commands: Commands,
-    chats: Query<(Entity, &Connection), Added<Connection>>,
-    pool: NonSend<TaskPool>,
-) {
+fn connect(mut commands: Commands, chats: Query<(Entity, &Connection), Added<Connection>>) {
     for (chat, con) in &chats {
-        let cell = Arc::new(Mutex::new(None));
         let config = Config {
             server: Some(con.host.clone()),
             port: Some(con.port),
             ping_time: Some(u32::MAX),
             ..Default::default()
         };
-        let task_cell = cell.clone();
-        pool.0
-            .spawn(async move {
-                let res = Compat::new(irc::client::Client::from_config(config)).await;
-                task_cell.lock().unwrap().replace(res);
-            })
-            .detach();
+        let fut = irc::client::Client::from_config(config);
+        let boxed_fut: Pin<Box<dyn std::future::Future<Output = _> + Send + Sync>> = Box::pin(fut);
+        let fut = Compat::new(boxed_fut);
+        let cell = OnceLock::new();
+        let _ = cell.set(fut);
         commands.entity(chat).insert(Connecting(cell));
     }
 }
 
-fn finish_connect(mut commands: Commands, chats: Query<(Entity, &mut Connecting)>) {
-    for (chat, connecting) in &chats {
-        let mut state = connecting.0.lock().unwrap();
-        let res = match state.take() {
-            None => continue,
-            Some(r) => r,
+fn finish_connect(mut commands: Commands, mut chats: Query<(Entity, &mut Connecting)>) {
+    for (chat, mut connecting) in &mut chats {
+        let fut = connecting.0.get_mut().unwrap();
+
+        let Some(res) = future::block_on(future::poll_once(fut)) else {
+            continue;
         };
-        drop(state);
         commands.entity(chat).remove::<Connecting>();
+
         let mut client = match res {
             Err(e) => {
-                error!("Failed to connect: {}", e);
+                error!("Failed to connect: {e:?}");
                 continue;
             }
             Ok(c) => c,
@@ -318,14 +321,7 @@ pub struct IRCPlugin;
 
 impl bevy_app::Plugin for IRCPlugin {
     fn build(&self, app: &mut bevy_app::App) {
-        use bevy_app::{PreUpdate, Update};
-
-        ComputeTaskPool::get_or_init(Default::default);
-        AsyncComputeTaskPool::get_or_init(Default::default);
-        IoTaskPool::get_or_init(Default::default);
-
-        app.init_non_send_resource::<TaskPool>();
-        app.add_systems(PreUpdate, tick);
+        use bevy_app::Update;
 
         app.add_event::<MessageEvent>();
         app.add_systems(Update, connect);
@@ -337,11 +333,3 @@ impl bevy_app::Plugin for IRCPlugin {
     }
 }
 
-#[derive(Resource, Default)]
-struct TaskPool(bevy_tasks::TaskPool);
-
-fn tick(pool: NonSend<TaskPool>) {
-    pool.0.with_local_executor(|executor| {
-        executor.try_tick();
-    });
-}
