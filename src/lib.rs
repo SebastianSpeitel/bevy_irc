@@ -324,5 +324,10 @@ impl bevy_app::Plugin for IRCPlugin {
         app.add_systems(Update, join_and_part);
         app.add_systems(Update, capabilities);
         app.add_systems(Update, receive);
+        app.add_systems(Update, main_thread_system);
     }
+}
+
+fn main_thread_system(_: NonSend<()>) {
+    bevy_tasks::tick_global_task_pools_on_main_thread();
 }
