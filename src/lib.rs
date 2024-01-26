@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use async_compat::Compat;
 use bevy_ecs::prelude::*;
-use bevy_tasks::AsyncComputeTaskPool;
+use bevy_tasks::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool};
 use futures_lite::{future, StreamExt};
 pub use irc;
 use irc::client::prelude::*;
@@ -317,7 +317,10 @@ impl bevy_app::Plugin for IRCPlugin {
     fn build(&self, app: &mut bevy_app::App) {
         use bevy_app::Update;
 
+        ComputeTaskPool::get_or_init(Default::default);
         AsyncComputeTaskPool::get_or_init(Default::default);
+        IoTaskPool::get_or_init(Default::default);
+
         app.insert_non_send_resource(NonSendRes);
         app.add_systems(Update, main_thread_system);
 
