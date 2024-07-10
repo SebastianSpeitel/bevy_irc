@@ -184,6 +184,12 @@ impl<T> Deref for Incoming<T> {
     }
 }
 
+impl<T> AsRef<T> for Incoming<T> {
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}
+
 /// Bevy Event for outgoing IRC messages and commands
 #[derive(Event, Debug, Clone)]
 pub struct Outgoing<T = irc::Message>(pub(crate) T);
@@ -192,6 +198,12 @@ impl<T> Deref for Outgoing<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> AsRef<T> for Outgoing<T> {
+    fn as_ref(&self) -> &T {
         &self.0
     }
 }
