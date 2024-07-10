@@ -54,6 +54,7 @@ impl bevy_app::Plugin for IRCPlugin {
             app.add_plugins(bevy_time::TimePlugin);
         }
 
+        app.add_event::<components::Incoming>();
         app.world_mut()
             .observe(systems::send::<irc_prelude::Message>);
         app.world_mut()

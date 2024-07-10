@@ -163,7 +163,11 @@ pub fn request_capabilities(
     }
 }
 
-pub fn poll_stream(mut commands: Commands, mut streams: Query<(Entity, &mut Stream)>) {
+pub fn poll_stream(
+    mut commands: Commands,
+    mut streams: Query<(Entity, &mut Stream)>,
+    mut incoming: EventWriter<Incoming>,
+) {
     use futures_util::StreamExt;
     for (id, mut stream) in &mut streams {
         loop {
@@ -180,7 +184,8 @@ pub fn poll_stream(mut commands: Commands, mut streams: Query<(Entity, &mut Stre
                     trace!(message = "Received message", ?msg);
                     let command = Incoming(msg.command.clone());
                     commands.trigger_targets(command, id);
-                    commands.trigger_targets(Incoming(msg), id);
+                    commands.trigger_targets(Incoming(msg.clone()), id);
+                    incoming.send(Incoming(msg));
                 }
                 Some(Err(e)) => {
                     error!(message = "Failed to poll stream", error=%e, ?stream);
