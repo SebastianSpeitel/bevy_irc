@@ -1,5 +1,7 @@
+#![allow(missing_docs)]
+use std::str::FromStr;
+
 use irc::proto::message::Tag;
-use thiserror::Error;
 
 pub trait TwitchMessageExt {
     type Error: std::error::Error;
@@ -7,18 +9,20 @@ pub trait TwitchMessageExt {
     fn message_id(&self) -> Option<&str>;
     fn user_id(&self) -> Option<&str>;
     fn display_name(&self) -> Option<&str>;
+    fn badges(&self) -> Option<Vec<Badge>>;
     fn set_reply_parent_id(&mut self, id: &str);
     fn set_reply_parent(&mut self, parent_message: &Self) {
         if let Some(id) = parent_message.message_id() {
             self.set_reply_parent_id(id);
         }
     }
+    /// Create a new reply message for the given message
     fn new_reply(&self, message: &str) -> Result<Self, Self::Error>
     where
         Self: Sized;
 }
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum MessageError {
     #[error("Invalid message command")]
     InvalidCommand,
@@ -26,13 +30,28 @@ pub enum MessageError {
     MissingId,
 }
 
-impl TwitchMessageExt for super::Message {
+pub struct Badge {
+    pub badge: String,
+    pub version: String,
+}
+
+impl FromStr for Badge {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut split = s.splitn(2, '/');
+        let badge = split.next().ok_or(())?.to_owned();
+        let version = split.next().ok_or(())?.to_owned();
+        Ok(Self { badge, version })
+    }
+}
+
+impl TwitchMessageExt for irc::proto::Message {
     type Error = MessageError;
 
     fn is_send_by_mod(&self) -> bool {
-        let tags = match &self.tags {
-            Some(tags) => tags,
-            None => return false,
+        let Some(tags) = &self.tags else {
+            return false;
         };
 
         for Tag(key, val) in tags {
@@ -45,6 +64,22 @@ impl TwitchMessageExt for super::Message {
             }
         }
         false
+    }
+
+    fn badges(&self) -> Option<Vec<Badge>> {
+        let tags = self.tags.as_ref()?;
+
+        let badges = match tags.iter().find(|Tag(key, _)| key == "badges") {
+            Some(Tag(_, Some(badges))) => badges,
+            _ => return None,
+        };
+
+        let badges = badges
+            .split(',')
+            .map(|s| s.parse().ok())
+            .collect::<Option<Vec<_>>>();
+
+        badges
     }
 
     fn display_name(&self) -> Option<&str> {
@@ -82,10 +117,9 @@ impl TwitchMessageExt for super::Message {
     }
 
     fn new_reply(&self, message: &str) -> Result<Self, Self::Error> {
-        use irc::proto::Command::PRIVMSG;
-        let channel = match &self.command {
-            PRIVMSG(ref channel, _) => channel,
-            _ => return Err(MessageError::InvalidCommand),
+        use irc::proto::{Command::PRIVMSG, Message};
+        let PRIVMSG(channel, _) = &self.command else {
+            return Err(MessageError::InvalidCommand);
         };
 
         let tags = match self.message_id() {
@@ -96,10 +130,12 @@ impl TwitchMessageExt for super::Message {
             None => return Err(MessageError::MissingId),
         };
 
-        Ok(Self {
+        let reply = Message {
             prefix: None,
             command: PRIVMSG(channel.to_owned(), message.to_owned()),
             tags,
-        })
+        };
+
+        Ok(reply)
     }
 }
