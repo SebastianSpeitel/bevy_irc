@@ -174,7 +174,7 @@ pub(crate) struct Pinger {
 
 /// Bevy Event for incoming IRC messages and commands
 #[derive(Event, Debug, Clone)]
-pub struct Incoming<T>(pub(crate) T);
+pub struct Incoming<T = irc::Message>(pub(crate) T);
 
 impl<T> Deref for Incoming<T> {
     type Target = T;
@@ -186,7 +186,7 @@ impl<T> Deref for Incoming<T> {
 
 /// Bevy Event for outgoing IRC messages and commands
 #[derive(Event, Debug, Clone)]
-pub struct Outgoing<T>(pub(crate) T);
+pub struct Outgoing<T = irc::Message>(pub(crate) T);
 
 impl<T> Deref for Outgoing<T> {
     type Target = T;
