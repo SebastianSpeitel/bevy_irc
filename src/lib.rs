@@ -8,6 +8,8 @@ pub use irc;
 
 /// Bevy components
 pub mod components;
+/// Bevy observers
+mod observers;
 /// Bevy systems
 mod systems;
 /// Utilities for using the Twitch IRC
@@ -55,10 +57,12 @@ impl bevy_app::Plugin for IRCPlugin {
         }
 
         app.add_event::<components::Incoming>();
+
         app.world_mut()
-            .observe(systems::send::<irc_prelude::Message>);
-        app.world_mut()
-            .observe(systems::send::<irc_prelude::Command>);
+            .observe(observers::send::<irc_prelude::Message>)
+            .observe(observers::send::<irc_prelude::Command>)
+            .observe(observers::on_ping)
+            .observe(observers::on_welcome);
 
         app.add_systems(
             Update,
