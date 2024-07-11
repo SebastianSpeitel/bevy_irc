@@ -174,45 +174,41 @@ pub(crate) struct Pinger {
 
 /// Bevy Event for incoming IRC messages and commands
 #[derive(Event, Debug, Clone)]
-pub struct Incoming<T = irc::Message>(pub(crate) T);
+pub struct Incoming(pub(crate) irc::Message);
 
-impl<T> Deref for Incoming<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
+impl AsRef<irc::Message> for Incoming {
+    fn as_ref(&self) -> &irc::Message {
         &self.0
     }
 }
 
-impl<T> AsRef<T> for Incoming<T> {
-    fn as_ref(&self) -> &T {
-        &self.0
+impl AsRef<irc::Command> for Incoming {
+    fn as_ref(&self) -> &irc::Command {
+        &self.0.command
     }
 }
 
 /// Bevy Event for outgoing IRC messages and commands
 #[derive(Event, Debug, Clone)]
-pub struct Outgoing<T = irc::Message>(pub(crate) T);
+pub struct Outgoing(pub(crate) irc::Message);
 
-impl<T> Deref for Outgoing<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
+impl AsRef<irc::Message> for Outgoing {
+    fn as_ref(&self) -> &irc::Message {
         &self.0
     }
 }
 
-impl<T> AsRef<T> for Outgoing<T> {
-    fn as_ref(&self) -> &T {
-        &self.0
+impl AsRef<irc::Command> for Outgoing {
+    fn as_ref(&self) -> &irc::Command {
+        &self.0.command
     }
 }
 
-impl<T> Outgoing<T> {
+impl Outgoing {
     /// Create a new outgoing command event
     #[inline]
     #[must_use]
-    pub fn new(msg: T) -> Self {
-        Self(msg)
+    pub fn new(msg: impl Into<irc::Message>) -> Self {
+        Self(msg.into())
     }
 }

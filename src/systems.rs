@@ -62,7 +62,7 @@ pub fn ping(
             return;
         }
         let ping = irc::Command::PING(String::new(), None);
-        commands.trigger_targets(Outgoing(ping), id);
+        commands.trigger_targets(Outgoing::new(ping), id);
         pinger.last_ping.reset();
     }
 }
@@ -75,9 +75,9 @@ pub fn identify(
         commands.entity(id).insert(Identifying);
         info!(message = "Identifying", ?auth);
         if let Some(pass) = &auth.pass {
-            commands.trigger_targets(Outgoing(irc::Command::PASS(pass.clone())), id);
+            commands.trigger_targets(Outgoing::new(irc::Command::PASS(pass.clone())), id);
         }
-        commands.trigger_targets(Outgoing(irc::Command::NICK(auth.nick.clone())), id);
+        commands.trigger_targets(Outgoing::new(irc::Command::NICK(auth.nick.clone())), id);
     }
 }
 
@@ -92,7 +92,7 @@ pub fn join_channels(
         info!(message = "Joining channels", ?channels);
         for channel in &channels.0 {
             let join = irc::Command::JOIN(channel.to_owned(), None, None);
-            commands.trigger_targets(Outgoing(join), id);
+            commands.trigger_targets(Outgoing::new(join), id);
         }
     }
 }
@@ -117,7 +117,7 @@ pub fn request_capabilities(
             .join(" ");
         let req = irc::Command::CAP(None, irc::CapSubCommand::REQ, None, Some(caps));
 
-        commands.trigger_targets(Outgoing(req), id);
+        commands.trigger_targets(Outgoing::new(req), id);
     }
 }
 
@@ -140,8 +140,6 @@ pub fn poll_stream(
                 }
                 Some(Ok(msg)) => {
                     trace!(message = "Received message", ?msg);
-                    let command = Incoming(msg.command.clone());
-                    commands.trigger_targets(command, id);
                     commands.trigger_targets(Incoming(msg.clone()), id);
                     incoming.send(Incoming(msg));
                 }
