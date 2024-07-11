@@ -208,20 +208,11 @@ impl<T> AsRef<T> for Outgoing<T> {
     }
 }
 
-impl Outgoing<irc::Command> {
+impl<T> Outgoing<T> {
     /// Create a new outgoing command event
     #[inline]
     #[must_use]
-    pub fn new(command: irc::Command) -> Self {
-        Self(command)
-    }
-}
-
-impl Outgoing<irc::Message> {
-    /// Create a new outgoing message event
-    #[inline]
-    #[must_use]
-    pub fn new(message: irc::Message) -> Self {
-        Self(message)
+    pub fn new(msg: T) -> Self {
+        Self(msg)
     }
 }
