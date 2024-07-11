@@ -3,6 +3,15 @@ use std::str::FromStr;
 
 use irc::proto::message::Tag;
 
+pub const HOST: &str = "irc.chat.twitch.tv";
+pub const PORT: u16 = {
+    if cfg!(feature = "tls-native") || cfg!(feature = "tls-rust") {
+        6697
+    } else {
+        6667
+    }
+};
+
 pub trait TwitchMessageExt {
     type Error: std::error::Error;
     fn is_send_by_mod(&self) -> bool;

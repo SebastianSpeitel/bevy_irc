@@ -58,8 +58,7 @@ impl bevy_app::Plugin for IRCPlugin {
 
         app.add_event::<components::Incoming>();
 
-        app.world_mut()
-            .observe(observers::send::<irc_prelude::Message>)
+        app.observe(observers::send::<irc_prelude::Message>)
             .observe(observers::send::<irc_prelude::Command>)
             .observe(observers::on_ping)
             .observe(observers::on_welcome);

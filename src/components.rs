@@ -44,8 +44,8 @@ impl Connection {
     #[must_use]
     pub fn twitch() -> Self {
         Self {
-            host: "irc.chat.twitch.tv".to_owned(),
-            port: 6697,
+            host: crate::twitch::HOST.to_owned(),
+            port: crate::twitch::PORT,
         }
     }
 }

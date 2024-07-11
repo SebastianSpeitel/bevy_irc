@@ -4,7 +4,7 @@ use async_compat::CompatExt;
 use bevy_ecs::prelude::*;
 use bevy_time::{Real, Time};
 use bevy_utils::{
-    futures::check_ready,
+    futures::{check_ready, now_or_never},
     tracing::{error, info, trace, warn},
 };
 
@@ -19,7 +19,9 @@ pub fn connect(
 ) {
     for (id, con) in &chats {
         let mut entity = commands.entity(id);
-        let fut = irc::Client::from_config(con.into());
+        let config = con.into();
+        info!(message = "Connecting", ?config);
+        let fut = irc::Client::from_config(config);
         // let fut = Box::pin(fut);
         // let fut = Compat::new(boxed_fut);
         let connecting = Connecting::new(fut);
@@ -127,7 +129,7 @@ pub fn poll_stream(
     use futures_util::StreamExt;
     for (id, mut stream) in &mut streams {
         loop {
-            let Some(next) = check_ready(&mut stream.0.next()) else {
+            let Some(next) = now_or_never(stream.0.next()) else {
                 break;
             };
             match next {
